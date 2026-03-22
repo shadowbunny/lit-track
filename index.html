@@ -441,6 +441,19 @@ aside{background:var(--bg-sidebar);border-right:.5px solid var(--border);padding
   <div class="modal" style="max-width:400px;">
     <button class="modal-close" onclick="closeSettings()">✕</button>
     <h2>Settings</h2>
+
+    <div style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:.75rem;">Data</div>
+    <div style="display:flex;gap:.5rem;margin-bottom:1.5rem;">
+      <button class="btn-add-book" style="flex:1;padding:.6rem;" onclick="exportData()">↓ Export backup</button>
+      <label style="flex:1;">
+        <div class="btn-add-article" style="padding:.6rem;text-align:center;cursor:pointer;border-radius:var(--radius-sm);font-size:12px;font-weight:600;">↑ Import backup</div>
+        <input type="file" id="import-file" accept=".json" style="display:none;" onchange="importData(event)"/>
+      </label>
+    </div>
+    <div class="err-msg" id="import-msg" style="color:var(--green-dark);"></div>
+
+    <div style="border-top:.5px solid var(--border);margin:1rem 0 1.25rem;"></div>
+    <div style="font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-3);margin-bottom:.75rem;">Password</div>
     <div class="settings-section"><label>Current password</label><input type="password" id="s-current" placeholder="Current password"/></div>
     <div class="settings-section"><label>New password</label><input type="password" id="s-new" placeholder="New password"/></div>
     <div class="settings-section"><label>Confirm new password</label><input type="password" id="s-confirm" placeholder="Confirm"/></div>
@@ -491,6 +504,7 @@ function logout(){
 function openSettings(){
   ['s-current','s-new','s-confirm'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('settings-error').textContent='';
+  document.getElementById('import-msg').textContent='';
   document.getElementById('settings-modal').classList.add('open');
 }
 function closeSettings(){document.getElementById('settings-modal').classList.remove('open');}
@@ -501,6 +515,40 @@ function saveSettings(){
   if(!nw){err.textContent='New password cannot be empty.';return;}
   if(nw!==cf){err.textContent='Passwords do not match.';return;}
   state.password=nw;saveState();closeSettings();
+}
+
+// ════════════════ EXPORT / IMPORT ════════════════
+function exportData(){
+  const payload={version:'littrack_v1',exportedAt:new Date().toISOString(),data:state};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='littrack-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importData(event){
+  const file=event.target.files[0];if(!file)return;
+  const msg=document.getElementById('import-msg');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const parsed=JSON.parse(e.target.result);
+      const incoming=parsed.data||parsed;
+      if(!incoming.lists||!incoming.books){msg.style.color='var(--red)';msg.textContent='Invalid backup file.';return;}
+      if(!confirm('This will replace all your current data with the backup. Continue?')){return;}
+      // preserve current password, merge rest
+      const pw=state.password;
+      state={...state,...incoming,password:pw};
+      saveState();renderAll();
+      msg.style.color='var(--green-dark)';
+      msg.textContent='✓ Data imported successfully.';
+      setTimeout(()=>{msg.textContent='';},3000);
+    }catch(err){msg.style.color='var(--red)';msg.textContent='Could not read file.';}
+    event.target.value='';
+  };
+  reader.readAsText(file);
 }
 
 // ════════════════ APP VIEW ════════════════
